@@ -1,8 +1,46 @@
-from flask import Flask, render_template_string, request
+from flask import Flask, render_template_string, request, jsonify
+
 import requests
 
 app = Flask(__name__)
 
+@app.route("/artist_songs", methods=["GET"])
+def get_artist_songs():
+    artist_id = request.args.get("id")
+    if not artist_id:
+        return jsonify({"error": "Please provide artist id"}), 400
+
+    # Example JioSaavn API URL
+    api_url = f"https://www.jiosaavn.com/api.php?__call=artist.getArtistPageDetails&artistid={artist_id}&_format=json&_marker=0&ctx=web6dot0"
+
+    try:
+        response = requests.get(api_url)
+        response.raise_for_status()
+        data = response.json()
+
+        # Yeh field check karo - kabhi 'topSongs' mein hota hai, kabhi 'songs' mein
+        songs_data = data.get("topSongs", {}).get("list", [])
+
+        songs_list = []
+        for song in songs_data:
+            songs_list.append({
+                "id": song.get("id"),
+                "title": song.get("title"),
+                "album": song.get("more_info", {}).get("album"),
+                "perma_url": song.get("perma_url")
+            })
+
+        total_songs = len(songs_list)
+
+        return jsonify({
+            "artist_id": artist_id,
+            "total_songs": total_songs,
+            "songs": songs_list
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+      
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
