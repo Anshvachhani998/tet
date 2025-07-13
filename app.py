@@ -1,52 +1,59 @@
-from flask import Flask, render_template_string, request, jsonify
-
+from flask import Flask, request, jsonify
 import requests
+import re
 
 app = Flask(__name__)
 
 @app.route("/artist_songs", methods=["GET"])
 def get_artist_songs():
-    artist_id = request.args.get("id")
-    if not artist_id:
-        return jsonify({"error": "Please provide artist id"}), 400
+    artist_name = request.args.get("name")
+    if not artist_name:
+        return jsonify({"error": "Please provide artist name"}), 400
 
-    # Step 1: Artist Page Details (for albums)
-    api_url = f"https://www.jiosaavn.com/api.php?__call=artist.getArtistPageDetails&artistid={artist_id}&_format=json&_marker=0&ctx=web6dot0"
+    # Step 1: Search artist
+    search_url = f"https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&query={artist_name}&ctx=web6dot0"
+    search_res = requests.get(search_url)
+    search_res.raise_for_status()
+    search_data = search_res.json()
 
-    try:
-        response = requests.get(api_url)
-        response.raise_for_status()
-        data = response.json()
+    artists = search_data.get("artists", {}).get("data", [])
+    if not artists:
+        return jsonify({"error": "Artist not found"}), 404
 
-        albums = data.get("albums", {}).get("data", [])
-        all_songs = []
+    # Use first artist
+    artist = artists[0]
+    artist_url = artist.get("perma_url")
 
-        for album in albums:
-            album_id = album.get("id")
-            album_url = f"https://www.jiosaavn.com/api.php?__call=content.getAlbumDetails&albumid={album_id}&_format=json&_marker=0&ctx=web6dot0"
-            album_res = requests.get(album_url)
-            album_res.raise_for_status()
-            album_data = album_res.json()
+    # Step 2: Use artist page to get albums
+    artist_page_url = f"{artist_url}"
+    artist_page_html = requests.get(artist_page_url).text
 
-            songs = album_data.get("songs", [])
-            for song in songs:
-                all_songs.append({
-                    "id": song.get("id"),
-                    "title": song.get("title"),
-                    "album": album.get("title"),
-                    "perma_url": song.get("perma_url")
-                })
+    # Extract album URLs from artist page HTML using regex
+    album_urls = re.findall(r'/album/[^"]+', artist_page_html)
+    album_urls = list(set(album_urls))  # unique
 
-        total_songs = len(all_songs)
+    all_songs = []
 
-        return jsonify({
-            "artist_id": artist_id,
-            "total_songs": total_songs,
-            "songs": all_songs
-        })
+    for album_url in album_urls:
+        album_api_url = f"https://www.jiosaavn.com/api.php?__call=webapi.get&token={album_url.split('/')[-1]}&type=album&_format=json"
+        album_res = requests.get(album_api_url)
+        if album_res.status_code != 200:
+            continue
+        album_data = album_res.json()
+        songs = album_data.get("songs", [])
+        for song in songs:
+            all_songs.append({
+                "id": song.get("id"),
+                "title": song.get("title"),
+                "album": album_data.get("title"),
+                "perma_url": song.get("perma_url")
+            })
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({
+        "artist_name": artist_name,
+        "total_songs": len(all_songs),
+        "songs": all_songs
+    })
       
 HTML_TEMPLATE = """
 <!DOCTYPE html>
