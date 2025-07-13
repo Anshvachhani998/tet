@@ -10,7 +10,7 @@ def get_artist_songs():
     if not artist_id:
         return jsonify({"error": "Please provide artist id"}), 400
 
-    # Example JioSaavn API URL
+    # Step 1: Artist Page Details (for albums)
     api_url = f"https://www.jiosaavn.com/api.php?__call=artist.getArtistPageDetails&artistid={artist_id}&_format=json&_marker=0&ctx=web6dot0"
 
     try:
@@ -18,24 +18,31 @@ def get_artist_songs():
         response.raise_for_status()
         data = response.json()
 
-        # Yeh field check karo - kabhi 'topSongs' mein hota hai, kabhi 'songs' mein
-        songs_data = data.get("topSongs", {}).get("list", [])
+        albums = data.get("albums", {}).get("data", [])
+        all_songs = []
 
-        songs_list = []
-        for song in songs_data:
-            songs_list.append({
-                "id": song.get("id"),
-                "title": song.get("title"),
-                "album": song.get("more_info", {}).get("album"),
-                "perma_url": song.get("perma_url")
-            })
+        for album in albums:
+            album_id = album.get("id")
+            album_url = f"https://www.jiosaavn.com/api.php?__call=content.getAlbumDetails&albumid={album_id}&_format=json&_marker=0&ctx=web6dot0"
+            album_res = requests.get(album_url)
+            album_res.raise_for_status()
+            album_data = album_res.json()
 
-        total_songs = len(songs_list)
+            songs = album_data.get("songs", [])
+            for song in songs:
+                all_songs.append({
+                    "id": song.get("id"),
+                    "title": song.get("title"),
+                    "album": album.get("title"),
+                    "perma_url": song.get("perma_url")
+                })
+
+        total_songs = len(all_songs)
 
         return jsonify({
             "artist_id": artist_id,
             "total_songs": total_songs,
-            "songs": songs_list
+            "songs": all_songs
         })
 
     except Exception as e:
