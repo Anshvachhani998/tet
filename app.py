@@ -15,7 +15,7 @@ def get_artist():
     if not artist_name:
         return jsonify({"error": "Please provide artist name as ?name=<artist_name>"}), 400
 
-    url = f"https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&query={artist_name}"
+    url = f"https://www.jiosaavn.com/api.php?__call=search.getArtistResults&_format=json&_marker=0&query={artist_name}"
     response = requests.get(url)
     if response.status_code != 200:
         return jsonify({"error": "Failed to fetch from JioSaavn"}), 500
