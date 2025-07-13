@@ -3,15 +3,19 @@ import requests
 
 app = Flask(__name__)
 
-SEARCH_URL = "https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&query={}"
+# ✅ Root route — server health check
+@app.route("/", methods=["GET"])
+def home():
+    return "Server is running! ✅"
 
+# ✅ Artist route — JioSaavn artist search
 @app.route("/artist", methods=["GET"])
 def get_artist():
     artist_name = request.args.get("name")
     if not artist_name:
         return jsonify({"error": "Please provide artist name as ?name=<artist_name>"}), 400
 
-    url = SEARCH_URL.format(artist_name)
+    url = f"https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&query={artist_name}"
     response = requests.get(url)
     if response.status_code != 200:
         return jsonify({"error": "Failed to fetch from JioSaavn"}), 500
