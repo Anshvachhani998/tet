@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import requests
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -9,7 +10,7 @@ def ms_to_minutes(ms):
     seconds = total_seconds % 60
     return f"{minutes}:{str(seconds).zfill(2)}"
 
-def spotify_download(url):
+def spotify_download_primary(url):
     if not url:
         raise ValueError("❌ Error: URL is missing!")
 
@@ -58,38 +59,6 @@ def spotify_download(url):
         'download': result['link']
     }
 
-@app.route('/spotify', methods=['GET'])
-def spotify_route():
-    url = request.args.get('url')
-    if not url:
-        return jsonify({'status': False, 'error': '❌ URL is required!'}), 400
-
-    try:
-        data = spotify_download(url)
-        return jsonify({'status': True, 'data': data}), 200
-    except ValueError as ve:
-        return jsonify({'status': False, 'error': str(ve)}), 400
-    except ConnectionError as ce:
-        return jsonify({'status': False, 'error': str(ce)}), 502
-    except Exception as e:
-        return jsonify({'status': False, 'error': f"❌ Unexpected error: {str(e)}"}), 500
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'status': False, 'error': '❌ Endpoint not found.'}), 404
-
-@app.errorhandler(405)
-def method_not_allowed(error):
-    return jsonify({'status': False, 'error': '❌ Method not allowed.'}), 405
-
-
-
-
-
-from flask import Flask, request, jsonify
-import requests
-from bs4 import BeautifulSoup
-
 class SpotMate:
     def __init__(self):
         self.session = requests.Session()
@@ -102,7 +71,6 @@ class SpotMate:
         response = self.session.get('https://spotmate.online/en', headers=headers)
         response.raise_for_status()
 
-        # Extract token
         soup = BeautifulSoup(response.text, 'html.parser')
         token = soup.find('meta', {'name': 'csrf-token'})
         if not token:
@@ -141,30 +109,51 @@ class SpotMate:
         self.session.close()
         self._token = None
 
-@app.route('/spotify2', methods=['GET'])
-def spotify2():
+@app.route('/spotify', methods=['GET'])
+def spotify_combined():
     url = request.args.get('url')
     if not url:
-        return jsonify({'status': False, 'error': 'Url is required'}), 400
+        return jsonify({'status': False, 'error': '❌ URL is required!'}), 400
+
     try:
-        spotmate = SpotMate()
-        track_info = spotmate.info(url)
-        convert_result = spotmate.convert(url)
+        # 🔵 Try primary
+        try:
+            data = spotify_download_primary(url)
+            return jsonify({'status': True, 'source': 'primary', 'data': data}), 200
+        except Exception as primary_err:
+            print(f"Primary failed: {primary_err}")
 
-        result = {
-            'status': True,
-            'data': {
-                'url': convert_result.get('url'),
-                'title': track_info.get('album', {}).get('name')
+        # 🟢 If primary fails, try SpotMate
+        try:
+            spotmate = SpotMate()
+            track_info = spotmate.info(url)
+            convert_result = spotmate.convert(url)
+
+            data = {
+                'artist': track_info.get('artists') or 'Unknown',
+                'title': track_info.get('album', {}).get('name') or 'Unknown',
+                'duration': 'Unknown',
+                'image': track_info.get('album', {}).get('cover') or None,
+                'download': convert_result.get('url')
             }
-        }
+            spotmate.clear()
 
-        spotmate.clear()
-        return jsonify(result)
+            return jsonify({'status': True, 'source': 'fallback', 'data': data}), 200
+        except Exception as fallback_err:
+            print(f"Fallback failed: {fallback_err}")
+
+        return jsonify({'status': False, 'error': '❌ Both downloaders failed!'}), 502
+
     except Exception as e:
-        return jsonify({'status': False, 'error': str(e)}), 500
+        return jsonify({'status': False, 'error': f"❌ Unexpected error: {str(e)}"}), 500
 
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'status': False, 'error': '❌ Endpoint not found.'}), 404
 
+@app.errorhandler(405)
+def method_not_allowed(error):
+    return jsonify({'status': False, 'error': '❌ Method not allowed.'}), 405
 
 if __name__ == '__main__':
     app.run(debug=True)
