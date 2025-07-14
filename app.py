@@ -82,5 +82,102 @@ def not_found(error):
 def method_not_allowed(error):
     return jsonify({'status': False, 'error': '❌ Method not allowed.'}), 405
 
+
+
+
+
+from flask import Flask, request, jsonify
+import requests
+from bs4 import BeautifulSoup
+
+class SpotMate:
+    def __init__(self):
+        self._cookie = None
+        self._token = None
+
+    def _visit(self):
+        headers = {
+            'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36',
+        }
+        response = requests.get('https://spotmate.online/en', headers=headers)
+        response.raise_for_status()
+
+        # Extract cookie
+        self._cookie = '; '.join([c.split(';')[0] for c in response.cookies.values()])
+
+        # Extract token
+        soup = BeautifulSoup(response.text, 'html.parser')
+        token = soup.find('meta', {'name': 'csrf-token'})
+        if not token:
+            raise Exception('Token CSRF tidak ditemukan.')
+        self._token = token['content']
+
+    def _get_headers(self):
+        return {
+            'authority': 'spotmate.online',
+            'accept': '*/*',
+            'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+            'content-type': 'application/json',
+            'cookie': self._cookie,
+            'origin': 'https://spotmate.online',
+            'referer': 'https://spotmate.online/en',
+            'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36',
+            'x-csrf-token': self._token,
+        }
+
+    def info(self, spotify_url):
+        if not self._cookie or not self._token:
+            self._visit()
+
+        payload = {'spotify_url': spotify_url}
+        response = requests.post('https://spotmate.online/getTrackData', json=payload, headers=self._get_headers())
+        response.raise_for_status()
+        return response.json()
+
+    def convert(self, spotify_url):
+        if not self._cookie or not self._token:
+            self._visit()
+
+        payload = {'urls': spotify_url}
+        response = requests.post('https://spotmate.online/convert', json=payload, headers=self._get_headers())
+        response.raise_for_status()
+        return response.json()
+
+    def clear(self):
+        self._cookie = None
+        self._token = None
+
+@app.route('/spotify2', methods=['GET'])
+def spotify2():
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'status': False, 'error': 'Url is required'}), 400
+    try:
+        spotmate = SpotMate()
+        track_info = spotmate.info(url)
+        convert_result = spotmate.convert(url)
+
+        result = {
+            'status': True,
+            'data': {
+                'url': convert_result.get('url'),
+                'title': track_info.get('album', {}).get('name')
+            }
+        }
+
+        spotmate.clear()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'status': False, 'error': str(e)}), 500
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
