@@ -153,34 +153,34 @@ def spotify_combined2():
     if not url:
         return jsonify({'status': False, 'error': '❌ URL is required!'}), 400
 
+    # Try SpotMate fallback downloader first
     try:
-            spotmate = SpotMate()
-            track_info = spotmate.info(url)
-            convert_result = spotmate.convert(url)
+        spotmate = SpotMate()
+        track_info = spotmate.info(url)
+        convert_result = spotmate.convert(url)
 
-            data = {
-                'artist': track_info.get('artists') or 'Unknown',
-                'title': track_info.get('album', {}).get('name') or 'Unknown',
-                'duration': 'Unknown',
-                'image': track_info.get('album', {}).get('cover') or None,
-                'download': convert_result.get('url')
-            }
-            spotmate.clear()
+        data = {
+            'artist': track_info.get('artists') or 'Unknown',
+            'title': track_info.get('album', {}).get('name') or 'Unknown',
+            'duration': 'Unknown',
+            'image': track_info.get('album', {}).get('cover') or None,
+            'download': convert_result.get('url')
+        }
+        spotmate.clear()
 
-            return jsonify({'status': True, 'source': 'fallback', 'data': data}), 200
-        except Exception as fallback_err:
-            print(f"Fallback failed: {fallback_err}")
+        return jsonify({'status': True, 'source': 'fallback', 'data': data}), 200
+    except Exception as fallback_err:
+        print(f"Fallback failed: {fallback_err}")
 
+        # If SpotMate fails, try primary downloader
         try:
             data = spotify_download_primary(url)
             return jsonify({'status': True, 'source': 'primary', 'data': data}), 200
         except Exception as primary_err:
             print(f"Primary failed: {primary_err}")
 
-        return jsonify({'status': False, 'error': '❌ Both downloaders failed!'}), 502
+            return jsonify({'status': False, 'error': '❌ Both downloaders failed!'}), 502
 
-    except Exception as e:
-        return jsonify({'status': False, 'error': f"❌ Unexpected error: {str(e)}"}), 500
 
 @app.errorhandler(404)
 def not_found(error):
