@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import quote
 
 app = Flask(__name__)
 
@@ -56,7 +57,7 @@ def spotify_download_primary(url):
         'title': meta.get('title') or 'Unknown',
         'duration': ms_to_minutes(meta['duration_ms']) if meta.get('duration_ms') else 'Unknown',
         'image': meta.get('cover'),
-        'download': result['link']
+        'download': quote(result['link'], safe=':/?&=')
     }
 
 class SpotMate:
