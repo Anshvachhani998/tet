@@ -92,18 +92,15 @@ from bs4 import BeautifulSoup
 
 class SpotMate:
     def __init__(self):
-        self._cookie = None
+        self.session = requests.Session()
         self._token = None
 
     def _visit(self):
         headers = {
             'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36',
         }
-        response = requests.get('https://spotmate.online/en', headers=headers)
+        response = self.session.get('https://spotmate.online/en', headers=headers)
         response.raise_for_status()
-
-        # Extract cookie
-        self._cookie = '; '.join([c.split(';')[0] for c in response.cookies.values()])
 
         # Extract token
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -114,43 +111,34 @@ class SpotMate:
 
     def _get_headers(self):
         return {
-            'authority': 'spotmate.online',
             'accept': '*/*',
-            'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
             'content-type': 'application/json',
-            'cookie': self._cookie,
             'origin': 'https://spotmate.online',
             'referer': 'https://spotmate.online/en',
-            'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '"Android"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
             'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36',
             'x-csrf-token': self._token,
         }
 
     def info(self, spotify_url):
-        if not self._cookie or not self._token:
+        if not self._token:
             self._visit()
 
         payload = {'spotify_url': spotify_url}
-        response = requests.post('https://spotmate.online/getTrackData', json=payload, headers=self._get_headers())
+        response = self.session.post('https://spotmate.online/getTrackData', json=payload, headers=self._get_headers())
         response.raise_for_status()
         return response.json()
 
     def convert(self, spotify_url):
-        if not self._cookie or not self._token:
+        if not self._token:
             self._visit()
 
         payload = {'urls': spotify_url}
-        response = requests.post('https://spotmate.online/convert', json=payload, headers=self._get_headers())
+        response = self.session.post('https://spotmate.online/convert', json=payload, headers=self._get_headers())
         response.raise_for_status()
         return response.json()
 
     def clear(self):
-        self._cookie = None
+        self.session.close()
         self._token = None
 
 @app.route('/spotify2', methods=['GET'])
@@ -175,7 +163,6 @@ def spotify2():
         return jsonify(result)
     except Exception as e:
         return jsonify({'status': False, 'error': str(e)}), 500
-
 
 
 
