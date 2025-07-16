@@ -1,5 +1,4 @@
-FROM python:3.10  # ya jo version chahiye
-
+FROM python:3.10
 WORKDIR /app
 
 COPY requirements.txt .
