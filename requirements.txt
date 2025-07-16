@@ -3,5 +3,3 @@ requests
 gunicorn
 beautifulsoup4
 lxml
-
-python-3.10.12
